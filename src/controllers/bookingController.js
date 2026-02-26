@@ -97,7 +97,7 @@ const deleteBooking = async (req, res) => {
     const canDelete =
       user.role === "admin" ||
       user.role === "owner" ||
-      (user.role === "user" && booking.userId === user.id); // Changed from user_id to userId
+      (user.role === "user" && booking.user_id === user.id); // Changed from user_id to userId
 
     if (!canDelete) {
       return res.status(403).json({
