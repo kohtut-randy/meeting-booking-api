@@ -9,12 +9,39 @@ class Booking {
     this.createdAt = createdAt;
   }
 
+  static formatToTimezoneOffset(value, offsetMinutes = 7 * 60) {
+    if (!value) return null;
+
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+
+    const shiftedDate = new Date(date.getTime() + offsetMinutes * 60 * 1000);
+    const isoWithoutZ = shiftedDate.toISOString().replace("Z", "");
+
+    const sign = offsetMinutes >= 0 ? "+" : "-";
+    const absoluteOffset = Math.abs(offsetMinutes);
+    const hours = String(Math.floor(absoluteOffset / 60)).padStart(2, "0");
+    const minutes = String(absoluteOffset % 60).padStart(2, "0");
+
+    return `${isoWithoutZ}${sign}${hours}:${minutes}`;
+  }
+
+  toJSON() {
+    return {
+      id: this.id,
+      user_id: this.user_id,
+      startTime: Booking.formatToTimezoneOffset(this.startTime),
+      endTime: Booking.formatToTimezoneOffset(this.endTime),
+      createdAt: Booking.formatToTimezoneOffset(this.createdAt),
+    };
+  }
+
   static async create(bookingData) {
     const { id, user_id, startTime, endTime, createdAt } = bookingData;
 
     const query = `
       INSERT INTO bookings (id, user_id, start_time, end_time, created_at)
-      VALUES (
+      SELECT
         COALESCE(
           $1,
           CASE
@@ -27,6 +54,11 @@ class Booking {
         $3,
         $4,
         COALESCE($5, NOW())
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM bookings
+        WHERE start_time < $4
+          AND end_time > $3
       )
       RETURNING id, user_id as "user_id", start_time as "startTime", 
                 end_time as "endTime", created_at as "createdAt"
@@ -39,6 +71,10 @@ class Booking {
       endTime,
       createdAt ?? null,
     ]);
+    if (result.rows.length === 0) {
+      return null;
+    }
+
     const booking = result.rows[0];
     return new Booking(
       booking.id,
@@ -133,7 +169,8 @@ class Booking {
       SELECT EXISTS(
         SELECT 1 FROM bookings 
         WHERE 
-          tstzrange(start_time, end_time) && tstzrange($1::timestamptz, $2::timestamptz)
+          start_time < $2
+          AND end_time > $1
     `;
 
     const params = [startTime, endTime];

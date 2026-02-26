@@ -46,6 +46,13 @@ const createBooking = async (req, res) => {
       endTime,
     });
 
+    if (!booking) {
+      return res.status(409).json({
+        error: "Booking conflicts with existing booking",
+        message: "The requested time slot is already booked",
+      });
+    }
+
     res.status(201).json({
       message: "Booking created successfully",
       booking,
